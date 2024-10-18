@@ -9,8 +9,9 @@ import (
 	"strconv"
 	"time"
 	_ "github.com/go-sql-driver/mysql"
-	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+	"gorm.io/driver/sqlite"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 type CotacaoMoeada struct {
@@ -81,15 +82,16 @@ func BuscaCotacao() (*CotacaoMoeada, error) {
 }
 
 func RegistraCotacao(cotacaoAtual string) {
+	db, err := gorm.Open(sqlite.Open("data.db"), &gorm.Config{})
+	if err != nil {
+		log.Fatal("Falha ao abrir o banco de dados: ", err)
+	}
+	
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, 10 * time.Millisecond)  
 	defer cancel()
 
-	dsn := "root:root@tcp(localhost:3306)/goexpert?charset=utf8mb4&parseTime=True&loc=Local"
-	db , err:= gorm.Open(mysql.Open(dsn), &gorm.Config{})
-	if err != nil {panic("Falha ao se conectar ao banco de dados")}
-    //db.Migrator().DropTable(&Cotacao{})
-    db.AutoMigrate(&Cotacao{})
+        db.AutoMigrate(&Cotacao{})
 
 	valorConv, _ := strconv.ParseFloat(cotacaoAtual, 64)
 	cotacao := Cotacao{Valor: valorConv}
@@ -97,12 +99,3 @@ func RegistraCotacao(cotacaoAtual string) {
 	if err != nil {log.Fatalf("falha ao gravar o registro: %v", err)}
 	println("Cotação registrada com sucesso")
 }
-
-
-
-
-
-
-
-
-
