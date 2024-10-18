@@ -21,7 +21,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(ctx, 300 * time.Millisecond)
 	defer cancel()
 
-    requisição, err := http.NewRequestWithContext(ctx, "GET", "http://localhost:8888/cotacao", nil)
+    requisição, err := http.NewRequestWithContext(ctx, "GET", "http://localhost:8080/cotacao", nil)
     if err != nil {        log.Fatalf("Erro ao fazer a requisição: %v", err)    }
     resposta, err := http.DefaultClient.Do(requisição)
     if err != nil {        log.Fatalf("Erro ao recuperar a resposta da requisição: %v", err)    }
