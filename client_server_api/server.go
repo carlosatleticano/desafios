@@ -1,17 +1,18 @@
 package main
 
 import (
-	"encoding/json"
-	"log"
-	"io"
-	"net/http"
 	"context"
+	"encoding/json"
+	"io"
+	"log"
+	"net/http"
 	"strconv"
 	"time"
+
 	_ "github.com/go-sql-driver/mysql"
-	"gorm.io/gorm"
-	"gorm.io/driver/sqlite"
 	_ "github.com/mattn/go-sqlite3"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 type CotacaoMoeada struct {
@@ -38,7 +39,7 @@ type Cotacao struct {
 
 func main() {
 	http.HandleFunc("/cotacao", BuscaCotacaoHandler)
-	http.ListenAndServe(":8080",nil)
+	http.ListenAndServe(":8070",nil)
 }
 	
 func BuscaCotacaoHandler (w http.ResponseWriter, r *http.Request) {
@@ -46,9 +47,12 @@ func BuscaCotacaoHandler (w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-		cotacao, error := BuscaCotacao()
-		if error != nil {
+		cotacao, msg , erro := BuscaCotacao()
+
+		if erro != nil {
 			w.WriteHeader(http.StatusInternalServerError)
+			resposta := map[string]string{"Erro":msg}
+			json.NewEncoder(w).Encode(resposta)
 			return	
 		}
 		w.Header().Set("Conten-Type", "application/json")
@@ -59,16 +63,22 @@ func BuscaCotacaoHandler (w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(resposta)
 }
 
-func BuscaCotacao() (*CotacaoMoeada, error) {
+func BuscaCotacao() (*CotacaoMoeada, string, error) {
 		ctx := context.Background()
 		ctx, cancel := context.WithTimeout(ctx, 200 * time.Millisecond)  
 		defer cancel()
 
 		req, err := http.NewRequestWithContext(ctx, "GET", "https://economia.awesomeapi.com.br/json/last/USD-BRL", nil)
-		if err != nil {			log.Fatal(err)		}
+		if err != nil {	
+					println("Erro ao fazer a requisição: ")
+					return nil, "Contexto da requisicao excedido", err
+		}
 
 		res, err := http.DefaultClient.Do(req)
-		if err != nil {			log.Fatal(err)		}
+		if err != nil {			
+			println("Erro ao fazer a requisição: ")
+			return nil, "Contexto da requisicao excedido", err
+		}
 		defer res.Body.Close()
 
 		body, err := io.ReadAll(res.Body)
@@ -77,11 +87,14 @@ func BuscaCotacao() (*CotacaoMoeada, error) {
 		err = json.Unmarshal(body, &cotacao)
 		if err != nil {			panic(err)		}
 		
-		RegistraCotacao(cotacao.USDBRL.Bid)
-		return &cotacao, nil
+		msg, err  := RegistraCotacao(cotacao.USDBRL.Bid)
+		if err	!= nil {
+			return nil, msg, err
+		}
+		return &cotacao, "",  nil
 }
 
-func RegistraCotacao(cotacaoAtual string) {
+func RegistraCotacao(cotacaoAtual string) (msg string, err error) {
 	db, err := gorm.Open(sqlite.Open("data.db"), &gorm.Config{})
 	if err != nil {
 		log.Fatal("Falha ao abrir o banco de dados: ", err)
@@ -91,11 +104,14 @@ func RegistraCotacao(cotacaoAtual string) {
 	ctx, cancel := context.WithTimeout(ctx, 10 * time.Millisecond)  
 	defer cancel()
 
-        db.AutoMigrate(&Cotacao{})
+    db.AutoMigrate(&Cotacao{})
 
 	valorConv, _ := strconv.ParseFloat(cotacaoAtual, 64)
 	cotacao := Cotacao{Valor: valorConv}
 	err = db.WithContext(ctx).Create(&cotacao).Error
-	if err != nil {log.Fatalf("falha ao gravar o registro: %v", err)}
+	if err != nil {
+		return "Contexto do banco excedido", err
+	}
 	println("Cotação registrada com sucesso")
+	return "", nil
 }
